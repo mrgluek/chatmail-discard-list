@@ -77,8 +77,9 @@ new line, and a short note on how you checked it (error from the postfix log,
 
 ## Daily check
 
-The `check domains` workflow probes every entry once a day. GitHub-hosted runners
-usually cannot connect to port 25, so there it checks DNS and TLS on 443/993. If
+The `check domains` workflow probes every entry once a day with a real SMTP
+check on port 25 (see below). If the runner cannot reach port 25, it falls back
+to DNS and TLS on 443/993, which is a much weaker signal. If
 some entries answer, it keeps one open issue labelled `revived` with the report
 and closes it when nothing answers any more. A domain that answers is only a
 candidate, so check it from a relay before removing it:

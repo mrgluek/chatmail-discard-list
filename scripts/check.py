@@ -3,10 +3,9 @@
 
 Two modes:
 
-  default   What GitHub Actions can check. GitHub-hosted runners cannot open
-            outgoing connections to port 25, so this checks DNS and TLS on
-            443 (web/ALPN) and 993 (IMAP) instead. A domain that passes is
-            only a *candidate* for removal.
+  default   For hosts that cannot connect out to port 25: checks DNS and TLS
+            on 443 (web/ALPN) and 993 (IMAP). Weak signal: a relay can serve
+            its website and still have port 25 closed.
   --smtp    Run on a relay: SMTP to the MX on port 25, EHLO, STARTTLS and a
             certificate check against the MX hostname. This is what chatmail's
             postfix does (smtp_tls_security_level = verify, cert must match the

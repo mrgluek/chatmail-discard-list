@@ -19,8 +19,8 @@ jobs:
 
       - name: Probe domains
         run: |
-          # GitHub-hosted runners usually cannot connect out to port 25. Use the
-          # real SMTP check when it works, otherwise fall back to TLS on 443/993.
+          # Use the real SMTP check when the runner can reach port 25 (it could on
+          # 2026-10-09), otherwise fall back to TLS on 443/993.
           mode=""
           if timeout 10 bash -c '</dev/tcp/nine.testrun.org/25' 2>/dev/null; then mode=--smtp; fi
           python3 scripts/check.py transport $mode --markdown report.md --alive alive.txt
