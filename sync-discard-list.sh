@@ -1,6 +1,6 @@
 #!/bin/bash
 # Fetch the shared discard list and install it as an extra postfix transport map.
-# Runs on the relay as root, from cron. See README.md.
+# Runs on the relay as root, from chatmail-discard-sync.timer. See README.md.
 #
 #   sync-discard-list.sh            normal run (quiet when nothing changed)
 #   sync-discard-list.sh --force    accept a list that adds more than MAX_ADD domains
@@ -38,7 +38,8 @@ if [ -n "$bad" ]; then
 fi
 
 # 2. Never discard our own domain or the big public relays, whatever the list says.
-mail_domain=$(sed -n 's/^mail_domain[[:space:]]*=[[:space:]]*//p' /usr/local/lib/chatmaild/chatmail.ini 2>/dev/null || true)
+# chatmail.ini: bare-metal path first, then chatmail/docker's.
+mail_domain=$(sed -n 's/^mail_domain[[:space:]]*=[[:space:]]*//p' /usr/local/lib/chatmaild/chatmail.ini /etc/chatmail/chatmail.ini 2>/dev/null | head -n1 || true)
 protected="$mail_domain $(postconf -h myhostname) nine.testrun.org ${DISCARD_LIST_PROTECT:-}"
 keys "$tmp" > "$tmp.new"
 for d in $protected; do
@@ -83,5 +84,5 @@ if [[ " ${cur//,/ } " != *" hash:$DST "* ]]; then
 fi
 
 if [ "$changed" = 1 ]; then
-    postfix reload 2>/dev/null   # it prints "refreshing..." to stderr, which cron would mail
+    postfix reload 2>/dev/null   # it prints "refreshing..." to stderr on every reload
 fi
