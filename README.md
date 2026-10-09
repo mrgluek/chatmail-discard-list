@@ -79,7 +79,7 @@ new line, and a short note on how you checked it (error from the postfix log,
 
 The `check domains` workflow probes every entry once a day with a real SMTP
 check on port 25 (see below). If the runner cannot reach port 25, it falls back
-to DNS and TLS on 443/993, which is a much weaker signal. If
+to TLS on IMAP port 993, which is a much weaker signal. If
 some entries answer, it keeps one open issue labelled `revived` with the report
 and closes it when nothing answers any more. A domain that answers is only a
 candidate, so check it from a relay before removing it:
@@ -90,3 +90,7 @@ python3 scripts/check.py --smtp transport
 
 This does what chatmail's postfix does: SMTP to the MX on port 25, STARTTLS,
 and a certificate check against the MX hostname (`smtp_tls_security_level = verify`).
+It also requires a valid certificate on `https://<domain>/`: a chatmail relay
+serves its website with the same certificate, and clients use port 443 too.
+The report shows how many days both certificates have left and warns when
+fewer than 7 remain.

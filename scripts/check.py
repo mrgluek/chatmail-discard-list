@@ -3,13 +3,16 @@
 
 Two modes:
 
-  default   For hosts that cannot connect out to port 25: checks DNS and TLS
-            on 443 (web/ALPN) and 993 (IMAP). Weak signal: a relay can serve
-            its website and still have port 25 closed.
-  --smtp    Run on a relay: SMTP to the MX on port 25, EHLO, STARTTLS and a
-            certificate check against the MX hostname. This is what chatmail's
-            postfix does (smtp_tls_security_level = verify, cert must match the
-            MX hostname; IP literals only need encryption).
+  --smtp    SMTP to the MX on port 25, EHLO, STARTTLS and a certificate check
+            against the MX hostname. This is what chatmail's postfix does
+            (smtp_tls_security_level = verify, cert must match the MX hostname;
+            IP literals only need encryption).
+  default   For hosts that cannot connect out to port 25: TLS on the MX's
+            IMAP port 993 instead. Weak signal: port 25 may still be closed.
+
+In both modes a domain also needs a valid certificate for https://<domain>/,
+which every chatmail relay serves with the same certificate. Days until the
+certificates expire are shown, with a warning below EXPIRY_WARN_DAYS.
 
 Only the Python standard library is used. DNS goes through Cloudflare DoH
 because the stdlib cannot look up MX records.
@@ -21,10 +24,12 @@ import smtplib
 import socket
 import ssl
 import sys
+import time
 import urllib.parse
 import urllib.request
 
 TIMEOUT = 15
+EXPIRY_WARN_DAYS = 7
 RTYPES = {"A": 1, "MX": 15, "AAAA": 28}
 
 
@@ -67,27 +72,43 @@ def mail_hosts(domain):
     return "no MX and no address"
 
 
-def tls_connect(host, port, verify_name):
+def tls_context(verify_name):
     ctx = ssl.create_default_context()
-    if verify_name is None:
+    if verify_name is None:   # IP literal: postfix only requires encryption
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+def days_left(tls_sock):
+    """Days until the peer certificate expires, None if it was not verified."""
+    cert = tls_sock.getpeercert()   # {} when verification is off
+    if not cert:
+        return None
+    return int((ssl.cert_time_to_seconds(cert["notAfter"]) - time.time()) // 86400)
+
+
+def tls_connect(host, port, verify_name):
     with socket.create_connection((host, port), timeout=TIMEOUT) as sock:
-        with ctx.wrap_socket(sock, server_hostname=verify_name):
-            pass
+        with tls_context(verify_name).wrap_socket(sock, server_hostname=verify_name) as tls:
+            return days_left(tls)
 
 
 def smtp_starttls(host, verify_name):
-    ctx = ssl.create_default_context()
-    if verify_name is None:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
     with smtplib.SMTP(host, 25, timeout=TIMEOUT, local_hostname=socket.getfqdn()) as s:
         s.ehlo()
         if not s.has_extn("starttls"):
             raise RuntimeError("no STARTTLS")
-        s.starttls(context=ctx)
+        s.starttls(context=tls_context(verify_name))
+        days = days_left(s.sock)
         s.ehlo()
+        return days
+
+
+def cert_note(days):
+    if days is None:
+        return ""
+    return f", cert {days}d left" + (" (expires soon!)" if days < EXPIRY_WARN_DAYS else "")
 
 
 def short(exc):
@@ -109,23 +130,30 @@ def probe(key, smtp):
             return False, hosts
         verify = True
 
-    errors = []
+    # 1. Mail: the first MX that works, the way postfix tries them.
+    port = 25 if smtp else 993
+    mail, errors = None, []
     for host in hosts:
         name = host if verify else None
-        if smtp:
-            try:
-                smtp_starttls(host, name)
-                return True, f"{host}:25 STARTTLS ok"
-            except Exception as e:
-                errors.append(f"{host}:25 {short(e)}")
-        else:
-            for port in (443, 993):
-                try:
-                    tls_connect(host, port, name)
-                    return True, f"{host}:{port} TLS ok"
-                except Exception as e:
-                    errors.append(f"{host}:{port} {short(e)}")
-    return False, "; ".join(errors)
+        try:
+            days = smtp_starttls(host, name) if smtp else tls_connect(host, port, name)
+            mail = f"{host}:{port} ok{cert_note(days)}"
+            break
+        except Exception as e:
+            errors.append(f"{host}:{port} {short(e)}")
+    if mail is None:
+        return False, "; ".join(errors)
+    if not verify:
+        return True, mail
+
+    # 2. Website: a chatmail relay serves https://<mail_domain>/ with the same
+    #    certificate. Clients use it too (account creation, webxdc, ALPN on 443),
+    #    so a broken certificate there means the relay is not really usable.
+    try:
+        days = tls_connect(key, 443, key)
+    except Exception as e:
+        return False, f"{mail}; https://{key} {short(e)}"
+    return True, f"{mail}; https ok{cert_note(days)}"
 
 
 def main():
@@ -141,7 +169,7 @@ def main():
         results = dict(zip(keys, pool.map(lambda k: probe(k, args.smtp), keys)))
 
     alive = [k for k in keys if results[k][0]]
-    mode = "SMTP port 25" if args.smtp else "DNS + TLS on 443/993"
+    mode = "SMTP port 25 + HTTPS" if args.smtp else "IMAP 993 + HTTPS, no port 25"
     lines = [f"Checked {len(keys)} entries ({mode}): **{len(alive)} look alive**.", "",
              "| Entry | Status | Detail |", "|---|---|---|"]
     for k in keys:
