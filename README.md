@@ -31,6 +31,10 @@ This installs `/usr/local/sbin/sync-discard-list`, adds
 `/etc/cron.d/chatmail-discard-list` (every 6 hours, at a random minute so that
 relays do not all fetch at once) and runs the first sync.
 
+If you use the list, consider adding your relay to the
+[Relays using the list](https://github.com/mrgluek/chatmail-discard-list/wiki/Relays-using-the-list)
+wiki page (anyone can edit it), so you can be reached when the sync script changes.
+
 Run the same command again to update the sync script; the cron schedule is kept.
 The sync script never updates itself, only the list: self-updating code would
 let anyone with write access to this repo run commands as root on every relay.
