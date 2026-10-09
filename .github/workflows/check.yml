@@ -1,0 +1,67 @@
+name: check domains
+
+# Once a day, probe every listed domain. If some of them look reachable again,
+# keep one open issue (label "revived") with the report; close it when none are.
+on:
+  schedule:
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe domains
+        run: |
+          # GitHub-hosted runners usually cannot connect out to port 25. Use the
+          # real SMTP check when it works, otherwise fall back to TLS on 443/993.
+          mode=""
+          if timeout 10 bash -c '</dev/tcp/nine.testrun.org/25' 2>/dev/null; then mode=--smtp; fi
+          python3 scripts/check.py transport $mode --markdown report.md --alive alive.txt
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create revived --color 0e8a16 --description "Listed domain looks reachable again" 2>/dev/null || true
+          num=$(gh issue list --label revived --state open --json number --jq '.[0].number // empty')
+
+          if [ ! -s alive.txt ]; then
+            if [ -n "$num" ]; then
+              gh issue close "$num" --comment "No listed domain looks alive any more."
+            fi
+            exit 0
+          fi
+
+          {
+            echo "These entries answered the daily check:"
+            echo
+            sed 's/^/- `/; s/$/`/' alive.txt
+            echo
+            echo "This is only a hint: a domain can answer and still not accept mail from"
+            echo "chatmail relays. Before removing an entry, check it from a relay:"
+            echo
+            echo '    python3 scripts/check.py --smtp transport'
+            echo
+            echo "and, if possible, send a test message. Then open a PR that removes it."
+            echo
+            echo "<details><summary>Full report</summary>"
+            echo
+            cat report.md
+            echo
+            echo "</details>"
+          } > body.md
+
+          # One issue updated in place, so the daily run does not create a new one each time.
+          if [ -n "$num" ]; then
+            gh issue edit "$num" --body-file body.md
+          else
+            gh issue create --title "Listed domains look reachable again" --label revived --body-file body.md
+          fi

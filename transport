@@ -1,0 +1,35 @@
+# Shared postfix transport map: domains that chatmail relays cannot deliver to.
+#
+# Format: one "<domain> discard:" per line, full-line comments only
+# (postfix does not support comments after an entry).
+# Put a "# YYYY-MM-DD reason" line above new entries.
+# Only "discard:" is accepted; sync-discard-list.sh rejects any other action.
+#
+# discard: drops the message silently instead of keeping it in the queue for
+# days. error: (bounce) was tested earlier and broke sending on our relays,
+# so the list uses discard: only.
+
+# 2026-10-09 initial import from chatmail.uk
+abc4w.ru               discard:
+bikechat34.ru          discard:
+bikerchat34.ru         discard:
+bloc7.icu              discard:
+chat.active-iq.com     discard:
+chat.daniil4jk.ru      discard:
+chat.deltachatkg.xyz   discard:
+chat.iptuov.ru         discard:
+darkrun.dev            discard:
+deltachat.355799.xyz   discard:
+deltachat.ru           discard:
+deltachat75.ru         discard:
+ghostek.dev            discard:
+hylidae.online         discard:
+klan5.cc               discard:
+kvikbrev.ukrudt.net    discard:
+mail.bikechat34.ru     discard:
+mjukur.is              discard:
+overedge.space         discard:
+ruchatmail.ru          discard:
+spb.ru.deltachat.fans  discard:
+xchatmail.ru           discard:
+[62.16.40.82]          discard:
