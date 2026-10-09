@@ -38,7 +38,8 @@ The script:
 - **appends** `hash:/etc/postfix/transport_discard_shared` to `transport_maps`.
   Your own maps stay first, and postfix uses the first match, so your entries
   always win. It re-adds the map on every run, because `cmdeploy run` rewrites
-  `main.cf` and drops `transport_maps`;
+  `main.cf` and drops `transport_maps`. If it finds `transport_maps` empty and
+  `/etc/postfix/transport.db` exists, it restores your local map in front too;
 - reloads postfix only when something changed, and logs changes to syslog
   (`journalctl -t chatmail-discard-sync`) and to stdout (so cron mails them).
 

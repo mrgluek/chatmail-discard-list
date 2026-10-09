@@ -12,6 +12,7 @@ export LC_ALL=C   # [a-z] in grep must not match uppercase or non-ASCII letters
 
 URL=${DISCARD_LIST_URL:-https://raw.githubusercontent.com/mrgluek/chatmail-discard-list/main/transport}
 DST=/etc/postfix/transport_discard_shared
+LOCAL=/etc/postfix/transport   # the operator's own map, always looked up first
 # Refuse a list that suddenly discards many new domains: a mistake or a
 # compromised repo should not blackhole mail on every relay at once.
 MAX_ADD=${DISCARD_LIST_MAX_ADD:-10}
@@ -69,6 +70,11 @@ fi
 # 4. Make sure postfix uses the map, after the local one. Checked on every run
 #    because `cmdeploy run` rewrites main.cf and drops transport_maps.
 cur=$(postconf -h transport_maps)
+# transport_maps empty (just wiped by cmdeploy) but the operator has a local
+# map: put it back first, so its routes (relays, Yggdrasil, ...) are not lost.
+if [ -z "$cur" ] && [ -f "$LOCAL.db" ]; then
+    cur="hash:$LOCAL"
+fi
 if [[ " ${cur//,/ } " != *" hash:$DST "* ]]; then
     new="${cur:+$cur, }hash:$DST"
     postconf -e "transport_maps = $new"
