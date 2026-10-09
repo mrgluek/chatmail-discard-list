@@ -15,11 +15,19 @@ PROTECTED = {"nine.testrun.org"}
 
 
 def main(path):
-    errors, seen = [], {}
+    errors, seen, keeps = [], {}, {}
     with open(path, encoding="utf-8") as f:
         for n, line in enumerate(f, 1):
             line = line.rstrip("\n")
-            if not line.strip() or line.lstrip().startswith("#"):
+            if line.lstrip().startswith("#"):
+                parts = line.lstrip()[1:].split(None, 2)
+                if parts and parts[0] == "keep:":
+                    if len(parts) < 3:
+                        errors.append(f"{path}:{n}: expected '# keep: <domain> <reason>'")
+                    else:
+                        keeps[parts[1]] = n
+                continue
+            if not line.strip():
                 continue
             if not ENTRY.match(line):
                 errors.append(f"{path}:{n}: expected '<lowercase domain> discard:', got {line!r}")
@@ -30,6 +38,10 @@ def main(path):
             seen[key] = n
             if key in PROTECTED:
                 errors.append(f"{path}:{n}: {key} is protected and must not be discarded")
+    # A keep for a domain that is no longer listed is stale and would be confusing.
+    for key, n in keeps.items():
+        if key not in seen:
+            errors.append(f"{path}:{n}: keep: {key} is not in the list")
     for e in errors:
         print(e)
     print(f"{len(seen)} entries, {len(errors)} errors")

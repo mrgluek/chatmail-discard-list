@@ -35,7 +35,7 @@ jobs:
 
           if [ ! -s alive.txt ]; then
             if [ -n "$num" ]; then
-              gh issue close "$num" --comment "No listed domain looks alive any more."
+              gh issue close "$num" --comment "No listed domain looks alive any more (entries marked keep are not counted)."
             fi
             exit 0
           fi
@@ -50,7 +50,9 @@ jobs:
             echo
             echo '    python3 scripts/check.py --smtp transport'
             echo
-            echo "and, if possible, send a test message. Then open a PR that removes it."
+            echo "and, if possible, send a test message. Then open a PR that removes it,"
+            echo "or one that adds a \`# keep: <domain> <reason>\` line if it should stay listed"
+            echo "(for example its mail goes to a service that is not a chatmail relay)."
             echo
             echo "<details><summary>Full report</summary>"
             echo

@@ -35,13 +35,21 @@ RTYPES = {"A": 1, "MX": 15, "AAAA": 28}
 
 
 def read_entries(path):
-    keys = []
+    """Listed keys, and {key: reason} from "# keep: <key> <reason>" comments."""
+    keys, keep = [], {}
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith("#"):
+            if line.startswith("#"):
+                # A domain that answers but should stay listed (e.g. its mail
+                # goes to a non-chatmail service). Still probed and shown in
+                # the report, but it does not keep the "revived" issue open.
+                parts = line[1:].split(None, 2)
+                if len(parts) >= 2 and parts[0] == "keep:":
+                    keep[parts[1]] = parts[2] if len(parts) > 2 else ""
+            elif line:
                 keys.append(line.split()[0])
-    return keys
+    return keys, keep
 
 
 def doh(name, rtype):
@@ -173,19 +181,24 @@ def main():
     ap.add_argument("--alive", help="write the alive entries to this file as a markdown list")
     args = ap.parse_args()
 
-    keys = read_entries(args.transport)
+    keys, keep = read_entries(args.transport)
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         results = dict(zip(keys, pool.map(lambda k: probe(k, args.smtp), keys)))
 
     alive = [k for k in keys if results[k][0]]
     noted = [k for k in alive if results[k][2]]
+    kept = [k for k in alive if k in keep]
+    to_review = [k for k in alive if k not in keep]
     mode = "SMTP port 25 + HTTPS" if args.smtp else "IMAP 993 + HTTPS, no port 25"
     lines = [f"Checked {len(keys)} entries ({mode}): **{len(alive)} look alive**"
-             f" ({len(noted)} of them probably not chatmail).", "",
+             f" ({len(noted)} of them probably not chatmail, {len(kept)} marked keep).", "",
              "| Entry | Status | Detail |", "|---|---|---|"]
     for k in keys:
         ok, detail, note = results[k]
         status = ("alive, not chatmail?" if note else "alive") if ok else "dead"
+        if k in keep:
+            status += ", keep"
+            detail = f"keep: {keep[k]}; {detail}" if keep[k] else detail
         lines.append(f"| `{k}` | {status} | {detail.replace('|', '/')} |")
     report = "\n".join(lines) + "\n"
 
@@ -195,8 +208,9 @@ def main():
             f.write(report)
     if args.alive:
         with open(args.alive, "w", encoding="utf-8") as f:
-            # Markdown list items, ready for the issue body.
-            f.writelines(f"- `{k}`" + (f" ({results[k][2]})" if results[k][2] else "") + "\n" for k in alive)
+            # Markdown list items, ready for the issue body. Kept entries are left
+            # out, so the issue closes when only they answer.
+            f.writelines(f"- `{k}`" + (f" ({results[k][2]})" if results[k][2] else "") + "\n" for k in to_review)
 
 
 if __name__ == "__main__":

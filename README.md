@@ -75,9 +75,26 @@ out of `transport_maps`.
 
 ## Adding or removing a domain
 
-Open a pull request against `transport`: a `# YYYY-MM-DD reason` comment above the
-new line, and a short note on how you checked it (error from the postfix log,
-`check.py --smtp` output). CI checks the format.
+Open a pull request against `transport` (the PR template lists what to include):
+a `# YYYY-MM-DD reason` comment above the new line, and a short note on how you
+checked it (error from the postfix log, `check.py --smtp` output). CI checks the
+format, and `main` only accepts PRs with a passing `validate` check.
+
+Keep a PR to at most 10 new domains: relays refuse larger updates until their
+admin reviews the list and runs `sync-discard-list --force`.
+
+### Domains that answer but stay listed
+
+If a listed domain answers again but should stay discarded (for example its mail
+now goes to Cloudflare Email Routing, not to a chatmail relay), add a line
+
+```
+# keep: example.org <reason>
+```
+
+The daily check still probes it and shows it as `keep` in the report, but it does
+not keep the `revived` issue open. CI fails on a `keep:` line without a reason or
+for a domain that is not in the list.
 
 ## Daily check
 
@@ -85,7 +102,7 @@ The `check domains` workflow probes every entry once a day with a real SMTP
 check on port 25 (see below). If the runner cannot reach port 25, it falls back
 to TLS on IMAP port 993, which is a much weaker signal. If
 some entries answer, it keeps one open issue labelled `revived` with the report
-and closes it when nothing answers any more. A domain that answers is only a
+and closes it when nothing answers any more (entries marked `keep` do not count). A domain that answers is only a
 candidate, so check it from a relay before removing it:
 
 ```sh

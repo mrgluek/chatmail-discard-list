@@ -3,6 +3,8 @@
 # Format: one "<domain> discard:" per line, full-line comments only
 # (postfix does not support comments after an entry).
 # Put a "# YYYY-MM-DD reason" line above new entries.
+# A domain that answers again but should stay listed gets a
+# "# keep: <domain> <reason>" line: the daily check then does not report it.
 # Only "discard:" is accepted; sync-discard-list.sh rejects any other action.
 #
 # discard: drops the message silently instead of keeping it in the queue for
@@ -22,6 +24,7 @@ deltachat.355799.xyz   discard:
 deltachat.ru           discard:
 deltachat75.ru         discard:
 ghostek.dev            discard:
+# keep: hylidae.online mail goes to Cloudflare Email Routing, not a chatmail relay (2026-10-09)
 hylidae.online         discard:
 klan5.cc               discard:
 kvikbrev.ukrudt.net    discard:
