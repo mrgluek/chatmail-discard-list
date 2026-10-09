@@ -43,7 +43,7 @@ jobs:
           {
             echo "These entries answered the daily check:"
             echo
-            sed 's/^/- `/; s/$/`/' alive.txt
+            cat alive.txt
             echo
             echo "This is only a hint: a domain can answer and still not accept mail from"
             echo "chatmail relays. Before removing an entry, check it from a relay:"

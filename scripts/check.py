@@ -18,6 +18,7 @@ Only the Python standard library is used. DNS goes through Cloudflare DoH
 because the stdlib cannot look up MX records.
 """
 import argparse
+import hashlib
 import concurrent.futures
 import json
 import smtplib
@@ -80,18 +81,19 @@ def tls_context(verify_name):
     return ctx
 
 
-def days_left(tls_sock):
-    """Days until the peer certificate expires, None if it was not verified."""
+def cert_info(tls_sock):
+    """(days until the peer certificate expires or None if not verified, sha256 of the cert)."""
+    fingerprint = hashlib.sha256(tls_sock.getpeercert(binary_form=True)).hexdigest()
     cert = tls_sock.getpeercert()   # {} when verification is off
     if not cert:
-        return None
-    return int((ssl.cert_time_to_seconds(cert["notAfter"]) - time.time()) // 86400)
+        return None, fingerprint
+    return int((ssl.cert_time_to_seconds(cert["notAfter"]) - time.time()) // 86400), fingerprint
 
 
 def tls_connect(host, port, verify_name):
     with socket.create_connection((host, port), timeout=TIMEOUT) as sock:
         with tls_context(verify_name).wrap_socket(sock, server_hostname=verify_name) as tls:
-            return days_left(tls)
+            return cert_info(tls)
 
 
 def smtp_starttls(host, verify_name):
@@ -100,9 +102,9 @@ def smtp_starttls(host, verify_name):
         if not s.has_extn("starttls"):
             raise RuntimeError("no STARTTLS")
         s.starttls(context=tls_context(verify_name))
-        days = days_left(s.sock)
+        info = cert_info(s.sock)
         s.ehlo()
-        return days
+        return info
 
 
 def cert_note(days):
@@ -117,17 +119,20 @@ def short(exc):
     return f"{type(exc).__name__}: {exc}"[:120]
 
 
+NOT_CHATMAIL = "probably not a chatmail relay: different certificates for mail and https"
+
+
 def probe(key, smtp):
-    """Return (alive, detail) for one transport key."""
+    """Return (alive, detail, note) for one transport key."""
     if key.startswith("["):
         hosts, verify = [key.strip("[]")], False   # IP literal: no name to verify
     else:
         try:
             hosts = mail_hosts(key)
         except Exception as e:
-            return False, f"DNS lookup failed: {short(e)}"
+            return False, f"DNS lookup failed: {short(e)}", ""
         if isinstance(hosts, str):
-            return False, hosts
+            return False, hosts, ""
         verify = True
 
     # 1. Mail: the first MX that works, the way postfix tries them.
@@ -136,24 +141,28 @@ def probe(key, smtp):
     for host in hosts:
         name = host if verify else None
         try:
-            days = smtp_starttls(host, name) if smtp else tls_connect(host, port, name)
+            days, mail_fp = smtp_starttls(host, name) if smtp else tls_connect(host, port, name)
             mail = f"{host}:{port} ok{cert_note(days)}"
             break
         except Exception as e:
             errors.append(f"{host}:{port} {short(e)}")
     if mail is None:
-        return False, "; ".join(errors)
+        return False, "; ".join(errors), ""
     if not verify:
-        return True, mail
+        return True, mail, ""
 
     # 2. Website: a chatmail relay serves https://<mail_domain>/ with the same
     #    certificate. Clients use it too (account creation, webxdc, ALPN on 443),
     #    so a broken certificate there means the relay is not really usable.
     try:
-        days = tls_connect(key, 443, key)
+        days, web_fp = tls_connect(key, 443, key)
     except Exception as e:
-        return False, f"{mail}; https://{key} {short(e)}"
-    return True, f"{mail}; https ok{cert_note(days)}"
+        return False, f"{mail}; https://{key} {short(e)}", ""
+    # chatmail uses one certificate for postfix, dovecot and nginx. A different
+    # one usually means the mail goes elsewhere (e.g. Cloudflare Email Routing).
+    # Not a reason to discard, only something to look at before removing.
+    note = NOT_CHATMAIL if web_fp != mail_fp else ""
+    return True, f"{mail}; https ok{cert_note(days)}", note
 
 
 def main():
@@ -161,7 +170,7 @@ def main():
     ap.add_argument("transport", nargs="?", default="transport")
     ap.add_argument("--smtp", action="store_true", help="probe port 25 (run on a relay)")
     ap.add_argument("--markdown", help="write a markdown report to this file")
-    ap.add_argument("--alive", help="write the alive keys to this file, one per line")
+    ap.add_argument("--alive", help="write the alive entries to this file as a markdown list")
     args = ap.parse_args()
 
     keys = read_entries(args.transport)
@@ -169,12 +178,15 @@ def main():
         results = dict(zip(keys, pool.map(lambda k: probe(k, args.smtp), keys)))
 
     alive = [k for k in keys if results[k][0]]
+    noted = [k for k in alive if results[k][2]]
     mode = "SMTP port 25 + HTTPS" if args.smtp else "IMAP 993 + HTTPS, no port 25"
-    lines = [f"Checked {len(keys)} entries ({mode}): **{len(alive)} look alive**.", "",
+    lines = [f"Checked {len(keys)} entries ({mode}): **{len(alive)} look alive**"
+             f" ({len(noted)} of them probably not chatmail).", "",
              "| Entry | Status | Detail |", "|---|---|---|"]
     for k in keys:
-        ok, detail = results[k]
-        lines.append(f"| `{k}` | {'alive' if ok else 'dead'} | {detail.replace('|', '/')} |")
+        ok, detail, note = results[k]
+        status = ("alive, not chatmail?" if note else "alive") if ok else "dead"
+        lines.append(f"| `{k}` | {status} | {detail.replace('|', '/')} |")
     report = "\n".join(lines) + "\n"
 
     print(report)
@@ -183,7 +195,8 @@ def main():
             f.write(report)
     if args.alive:
         with open(args.alive, "w", encoding="utf-8") as f:
-            f.writelines(k + "\n" for k in alive)
+            # Markdown list items, ready for the issue body.
+            f.writelines(f"- `{k}`" + (f" ({results[k][2]})" if results[k][2] else "") + "\n" for k in alive)
 
 
 if __name__ == "__main__":

@@ -94,3 +94,8 @@ It also requires a valid certificate on `https://<domain>/`: a chatmail relay
 serves its website with the same certificate, and clients use port 443 too.
 The report shows how many days both certificates have left and warns when
 fewer than 7 remain.
+
+A chatmail relay uses one certificate for mail and for the website. When the
+two differ, an alive entry is marked "probably not a chatmail relay" (for example
+a domain whose mail goes to Cloudflare Email Routing). That alone is no reason to
+discard a domain, but it is worth a closer look before removing it from the list.
