@@ -12,4 +12,4 @@ jobs:
       - name: List format
         run: python3 scripts/validate.py transport
       - name: Shellcheck
-        run: shellcheck sync-discard-list.sh
+        run: shellcheck sync-discard-list.sh install.sh

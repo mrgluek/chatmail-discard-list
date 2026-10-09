@@ -16,6 +16,7 @@ broke sending, so the list uses `discard:` only.
 | File | What it is |
 |---|---|
 | `transport` | The list. One `<domain> discard:` per line, full-line `#` comments. |
+| `install.sh` | Installs, updates or removes everything below on a relay. |
 | `sync-discard-list.sh` | Runs on the relay from cron: downloads the list, checks it, installs it as a postfix map. |
 | `scripts/check.py` | Probes every entry and shows which ones look alive again. |
 | `scripts/validate.py` | Format check, run by CI on every push and PR. |
@@ -23,14 +24,16 @@ broke sending, so the list uses `discard:` only.
 ## Install on a relay
 
 ```sh
-curl -fsSo /usr/local/sbin/sync-discard-list \
-  https://raw.githubusercontent.com/mrgluek/chatmail-discard-list/main/sync-discard-list.sh
-chmod 755 /usr/local/sbin/sync-discard-list
-/usr/local/sbin/sync-discard-list          # first run: installs the map and prints what it did
-echo '17 */6 * * * root /usr/local/sbin/sync-discard-list' > /etc/cron.d/chatmail-discard-list
+curl -fsSL https://raw.githubusercontent.com/mrgluek/chatmail-discard-list/main/install.sh | sudo bash
 ```
 
-Please pick your own minute instead of `17`, so that relays do not all fetch at once.
+This installs `/usr/local/sbin/sync-discard-list`, adds
+`/etc/cron.d/chatmail-discard-list` (every 6 hours, at a random minute so that
+relays do not all fetch at once) and runs the first sync.
+
+Run the same command again to update the sync script; the cron schedule is kept.
+The sync script never updates itself, only the list: self-updating code would
+let anyone with write access to this repo run commands as root on every relay.
 
 The script:
 
@@ -64,11 +67,11 @@ example.org   :
 ### Removing it
 
 ```sh
-rm /etc/cron.d/chatmail-discard-list /usr/local/sbin/sync-discard-list
-postconf -e "transport_maps = hash:/etc/postfix/transport"   # your previous value
-rm /etc/postfix/transport_discard_shared*
-postfix reload
+curl -fsSL https://raw.githubusercontent.com/mrgluek/chatmail-discard-list/main/install.sh | sudo bash -s -- --uninstall
 ```
+
+It removes the script, the cron file and the map, and takes only the shared map
+out of `transport_maps`.
 
 ## Adding or removing a domain
 
