@@ -39,4 +39,5 @@ xchatmail.ru           discard:
 
 # 2026-10-18 DNSSEC broken: DS at .eu matches no DNSKEY, every validating resolver
 # returns SERVFAIL; 1216 messages stuck on chatmail.uk for 25 h
-chat.in-the.eu         discard:
+# chat.in-the.eu         discard:
+# 2026-10-26 revived
