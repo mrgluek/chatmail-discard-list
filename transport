@@ -41,3 +41,6 @@ xchatmail.ru           discard:
 # returns SERVFAIL; 1216 messages stuck on chatmail.uk for 25 h
 # chat.in-the.eu         discard:
 # 2026-10-26 revived
+
+# server shut down since 2026-10-25
+msk.ru.deltachat.fans    discard:
