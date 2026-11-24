@@ -44,3 +44,12 @@ xchatmail.ru           discard:
 
 # server shut down since 2026-10-25
 msk.ru.deltachat.fans    discard:
+
+# 2026-11-24 not delivering, mail piles up in relay queues (532 recipients on one relay, earlier hundreds on chatmail.uk); the daily check will report when it answers again
+e2e.sus.fr               discard:
+
+# 2026-11-24 blocked by the hoster, 33 recipients stuck on a relay queue
+chat.namnechegoskrivat.net  discard:
+
+# 2026-11-24 private address (RFC 1918), cannot be reached from the internet; 316 messages from one client stuck 12 h on chatmail.uk ("Connection timed out")
+[192.168.42.1]           discard:
