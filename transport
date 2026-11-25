@@ -46,7 +46,8 @@ xchatmail.ru           discard:
 msk.ru.deltachat.fans    discard:
 
 # 2026-11-24 not delivering, mail piles up in relay queues (532 recipients on one relay, earlier hundreds on chatmail.uk); the daily check will report when it answers again
-e2e.sus.fr               discard:
+#e2e.sus.fr               discard:
+# 2026-11-25 revived
 
 # 2026-11-24 blocked by the hoster, 33 recipients stuck on a relay queue
 chat.namnechegoskrivat.net  discard:
